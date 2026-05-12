@@ -37,7 +37,7 @@ const ProtectedRoute = ({
   const { user, roles, loading } = useAuth();
   // Shows a loading message while the authentication state is still being checked.
 
-  if (loading) return <p className="p-8 text-center text-body">Р—Р°РіСЂСѓР·РєР°...</p>;
+  if (loading) return <p className="p-8 text-center text-body">Загрузка...</p>;
   // Sends visitors to the auth page when there is no signed-in user.
   if (!user) return <Navigate to="/auth" replace />;
 
