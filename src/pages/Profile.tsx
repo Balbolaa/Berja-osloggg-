@@ -218,13 +218,13 @@ const Profile = () => {
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      toast.error('Пожалуйста, выберите изображение');
+      toast.error('Please choose an image');
       event.target.value = '';
       return;
     }
 
     if (file.size > MAX_SOURCE_FILE_BYTES) {
-      toast.error('Фото слишком большое. Выберите файл до 12 МБ.');
+      toast.error('Photo is too large. Choose a file up to 12 MB.');
       event.target.value = '';
       return;
     }
@@ -243,7 +243,7 @@ const Profile = () => {
       setCropOffset(getCenteredOffset(nextCropImage, 1));
       setCropDialogOpen(true);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Не удалось подготовить фото');
+      toast.error(error instanceof Error ? error.message : 'Could not prepare the photo');
     } finally {
       event.target.value = '';
     }
@@ -310,7 +310,7 @@ const Profile = () => {
       canvas.width = OUTPUT_AVATAR_SIZE;
       canvas.height = OUTPUT_AVATAR_SIZE;
       const context = canvas.getContext('2d');
-      if (!context) throw new Error('Не удалось подготовить фото для сохранения');
+      if (!context) throw new Error('Could not prepare the photo for saving');
 
       context.drawImage(
         image,
@@ -331,7 +331,7 @@ const Profile = () => {
       }
 
       if (compressedDataUrl.length > MAX_SAVED_DATA_URL_LENGTH) {
-        throw new Error('Фото всё ещё слишком большое после сжатия. Попробуйте другое изображение.');
+        throw new Error('Photo is still too large after compression. Try another image.');
       }
 
       const { error } = await supabase
@@ -344,9 +344,9 @@ const Profile = () => {
       setAvatarUrl(compressedDataUrl);
       setCropDialogOpen(false);
       setCropImage(null);
-      toast.success('Фото обрезано и сохранено');
+      toast.success('Photo saved');
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Не удалось сохранить фото');
+      toast.error(error instanceof Error ? error.message : 'Could not save the photo');
     } finally {
       setUploadingAvatar(false);
     }
@@ -467,7 +467,10 @@ const Profile = () => {
             <Logo size="md" />
           </div>
 
-          <div style={{ maxWidth: 480, margin: "0 auto", padding: "20px 20px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+          <form
+            onSubmit={handleSave}
+            style={{ maxWidth: 480, margin: "0 auto", padding: "20px 20px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}
+          >
             <div style={{ position: "relative", marginBottom: 4 }}>
               <div style={{ width: 100, height: 100, borderRadius: "50%", background: "linear-gradient(145deg, #e0d0d0, #c8b8b8)", display: "flex", alignItems: "center", justifyContent: "center", border: "3px solid #fff", boxShadow: "0 4px 16px rgba(0,0,0,0.13)" }}>
                 {avatarUrl ? (
@@ -492,12 +495,44 @@ const Profile = () => {
 
             <StarRating value={Math.round(averageRating ?? 0)} readonly size={34} />
 
+            <button
+              type="button"
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={uploadingAvatar}
+              style={{ padding: "10px 16px", background: "#fff", border: "1.5px solid #ccc", borderRadius: 8, fontSize: 13, cursor: "pointer", fontWeight: 600 }}
+            >
+              Change photo
+            </button>
+
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleAvatarSelect}
+              className="hidden"
+            />
+
             <div style={{ background: "#FDE8EA", borderRadius: 14, padding: "16px 18px", width: "100%", marginTop: 4 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>
                 About me:
               </div>
-              <div style={{ fontSize: 14, color: "#333", lineHeight: 1.65 }}>{bio || '"Tell others about yourself!"'}</div>
+              <Textarea
+                id="requester-bio"
+                value={bio}
+                onChange={(event) => setBio(event.target.value)}
+                className="min-h-[110px] text-body"
+                placeholder="Tell others about yourself"
+              />
             </div>
+
+            <Button
+              type="submit"
+              size="lg"
+              disabled={saving || uploadingAvatar}
+              className="w-full min-h-tap text-body font-bold bg-[#1B2CC1] text-white hover:bg-[#152099]"
+            >
+              {saving ? 'Saving...' : 'Save'}
+            </Button>
 
             <div style={{ width: "100%", height: 1.5, background: "#1B2CC1", opacity: 0.3 }} />
 
@@ -554,11 +589,75 @@ const Profile = () => {
               </div>
             </div>
 
-            <button onClick={signOut} style={{ width: "100%", padding: "14px", background: "#E03A1E", color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 16, cursor: "pointer", boxShadow: "0 3px 12px rgba(224,58,30,0.25)", marginTop: 4 }}>
+            <button type="button" onClick={signOut} style={{ width: "100%", padding: "14px", background: "#E03A1E", color: "#fff", border: "none", borderRadius: 10, fontWeight: 700, fontSize: 16, cursor: "pointer", boxShadow: "0 3px 12px rgba(224,58,30,0.25)", marginTop: 4 }}>
               Logout
             </button>
-          </div>
+          </form>
         </div>
+        <Dialog open={cropDialogOpen} onOpenChange={(open) => !open && !uploadingAvatar && handleCropCancel()}>
+          <DialogContent className="sm:max-w-xl">
+            <DialogHeader>
+              <DialogTitle>Crop photo</DialogTitle>
+              <DialogDescription>Drag the image inside the frame and adjust the zoom. The photo will be resized and compressed before saving.</DialogDescription>
+            </DialogHeader>
+
+            {cropImage && rendered && (
+              <div className="space-y-4">
+                <div
+                  className="relative mx-auto overflow-hidden rounded-2xl border bg-muted touch-none"
+                  style={{ width: CROP_FRAME_SIZE, height: CROP_FRAME_SIZE }}
+                  onPointerDown={handlePointerDown}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  onPointerCancel={handlePointerUp}
+                >
+                  <img
+                    src={cropImage.src}
+                    alt="Crop preview"
+                    draggable={false}
+                    className="absolute max-w-none select-none"
+                    style={{
+                      width: rendered.width,
+                      height: rendered.height,
+                      transform: `translate(${cropOffset.x}px, ${cropOffset.y}px)`,
+                    }}
+                  />
+                  <div className="pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-primary/70" />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm text-muted-foreground">
+                    <span>Zoom</span>
+                    <span>{cropZoom.toFixed(1)}x</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="3"
+                    step="0.1"
+                    value={cropZoom}
+                    onChange={(event) => handleCropZoomChange(Number(event.target.value))}
+                    className="w-full"
+                  />
+                </div>
+
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  <Button type="button" variant="outline" onClick={handleCropCancel} disabled={uploadingAvatar}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleCropSave}
+                    disabled={uploadingAvatar}
+                    className="bg-[#1B2CC1] text-white hover:bg-[#152099]"
+                  >
+                    {uploadingAvatar ? 'Saving...' : 'Save photo'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
@@ -740,10 +839,8 @@ const Profile = () => {
       <Dialog open={cropDialogOpen} onOpenChange={(open) => !open && !uploadingAvatar && handleCropCancel()}>
         <DialogContent className="sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>Обрезать фото</DialogTitle>
-            <DialogDescription>
-              Перетащите изображение внутри рамки и настройте масштаб. Мы автоматически уменьшим и сожмём фото перед сохранением.
-            </DialogDescription>
+            <DialogTitle>Crop photo</DialogTitle>
+            <DialogDescription>Drag the image inside the frame and adjust the zoom. The photo will be resized and compressed before saving.</DialogDescription>
           </DialogHeader>
 
           {cropImage && rendered && (
@@ -758,7 +855,7 @@ const Profile = () => {
               >
                 <img
                   src={cropImage.src}
-                  alt="Предпросмотр обрезки"
+                  alt="Crop preview"
                   draggable={false}
                   className="absolute max-w-none select-none"
                   style={{
@@ -772,7 +869,7 @@ const Profile = () => {
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <span>Масштаб</span>
+                  <span>Zoom</span>
                   <span>{cropZoom.toFixed(1)}x</span>
                 </div>
                 <input
@@ -788,7 +885,7 @@ const Profile = () => {
 
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
                 <Button type="button" variant="outline" onClick={handleCropCancel} disabled={uploadingAvatar}>
-                  Отмена
+                  Cancel
                 </Button>
                 <Button
                   type="button"
@@ -796,7 +893,7 @@ const Profile = () => {
                   disabled={uploadingAvatar}
                   className="bg-[#1B2CC1] text-white hover:bg-[#152099]"
                 >
-                  {uploadingAvatar ? 'Сохраняем...' : 'Сохранить фото'}
+                  {uploadingAvatar ? 'Saving...' : 'Save photo'}
                 </Button>
               </div>
             </div>
